@@ -1,0 +1,84 @@
+# backend/main.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+
+app = FastAPI()
+
+# Mock databases for demo purposes
+DRUG_INTERACTIONS = {
+    ("aspirin", "ibuprofen"): "May increase risk of bleeding",
+    ("paracetamol", "ibuprofen"): "Generally safe",
+}
+
+AGE_DOSAGE = {
+    "aspirin": { "child": "50mg", "adult": "100mg", "elderly": "75mg" },
+    "ibuprofen": { "child": "100mg", "adult": "200mg", "elderly": "150mg" },
+}
+
+ALTERNATIVES = {
+    "aspirin": ["acetaminophen", "naproxen"],
+    "ibuprofen": ["naproxen", "diclofenac"]
+}
+
+class DrugInteractionRequest(BaseModel):
+    drugs: List[str]
+
+class DosageRequest(BaseModel):
+    drug: str
+    age: int
+
+class MedicationSuggestionRequest(BaseModel):
+    drug: str
+
+class DrugInfoExtractionRequest(BaseModel):
+    medical_text: str
+
+@app.post("/check-interactions")
+def check_interactions(data: DrugInteractionRequest):
+    drugs = data.drugs
+    interactions = []
+    for i in range(len(drugs)):
+        for j in range(i + 1, len(drugs)):
+            pair = (drugs[i].lower(), drugs[j].lower())
+            rev_pair = (drugs[j].lower(), drugs[i].lower())
+            if pair in DRUG_INTERACTIONS:
+                interactions.append({"drugs": pair, "interaction": DRUG_INTERACTIONS[pair]})
+            elif rev_pair in DRUG_INTERACTIONS:
+                interactions.append({"drugs": rev_pair, "interaction": DRUG_INTERACTIONS[rev_pair]})
+    return {"interactions": interactions}
+
+@app.post("/dosage-recommendation")
+def dosage_recommendation(data: DosageRequest):
+    drug = data.drug.lower()
+    age = data.age
+    if drug not in AGE_DOSAGE:
+        raise HTTPException(status_code=404, detail="Drug not found")
+
+    if age < 12:
+        category = "child"
+    elif age > 60:
+        category = "elderly"
+    else:
+        category = "adult"
+
+    dosage = AGE_DOSAGE[drug].get(category, "Dosage info not available")
+    return {"drug": drug, "age_category": category, "recommended_dosage": dosage}
+
+@app.post("/alternative-medications")
+def alternative_medications(data: MedicationSuggestionRequest):
+    drug = data.drug.lower()
+    alternatives = ALTERNATIVES.get(drug, [])
+    return {"drug": drug, "alternatives": alternatives}
+
+@app.post("/extract-drug-info")
+def extract_drug_info(data: DrugInfoExtractionRequest):
+    # This should call an actual NLP model from Hugging Face to extract drug info
+    # Here we'll mock a response for demo
+    return {
+        "extracted_info": {
+            "name": "aspirin",
+            "dosage": "100mg",
+            "frequency": "twice a day"
+        }
+    }
